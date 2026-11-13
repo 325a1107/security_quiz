@@ -6,6 +6,7 @@ import { InspectorPanel } from './InspectorPanel';
 import { QuestionFeedback } from './QuestionFeedback';
 import { Shield, ShieldAlert, Heart, Clock, Award, Flame, AlertCircle } from 'lucide-react';
 import { playClickSound, playSuccessSound, playFailureSound } from '../utils/audio';
+import { secureShuffleArray } from '../utils/security';
 
 interface GamePlayProps {
   difficulty: Difficulty;
@@ -42,30 +43,18 @@ export const GamePlay: React.FC<GamePlayProps> = ({
     isCorrect: boolean;
   } | null>(null);
 
-  // Timer for Hard mode
+  // Timer & atomic submission guard for Hard mode / rapid-click race prevention
   const [timeLeft, setTimeLeft] = useState<number | null>(config.timeLimitPerQuestion || null);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const submittedQuestionRef = useRef<number | null>(null);
+  const latestDecisionHandlerRef = useRef<(userJudgedSpoofed: boolean, isTimeout?: boolean) => void>(() => {});
 
-  // Fisher-Yates shuffle algorithm for true unbiased randomness
-  const shuffleArray = <T,>(array: T[]): T[] => {
-    const arr = [...array];
-    for (let i = arr.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [arr[i], arr[j]] = [arr[j], arr[i]];
-    }
-    return arr;
-  };
-
-  // Initialize scenarios on mount or difficulty change with guaranteed random selection
+  // Initialize scenarios on mount or difficulty change with Web Crypto CSPRNG selection
   useEffect(() => {
-    // Filter scenarios matching this difficulty
     const matched = SCENARIOS.filter(s => s.difficulty === difficulty);
-    // Shuffle the full pool using Fisher-Yates
-    const randomizedPool = shuffleArray(matched);
-    // Take the target question count
+    const randomizedPool = secureShuffleArray(matched);
     const selected = randomizedPool.slice(0, config.questionCount);
-    // Ensure final presentation order is also freshly shuffled
-    setScenarioList(shuffleArray(selected));
+    setScenarioList(secureShuffleArray(selected));
     setCurrentIndex(0);
     setLives(config.initialLives);
     setScore(0);
@@ -75,12 +64,13 @@ export const GamePlay: React.FC<GamePlayProps> = ({
     setUnlockedClueIds([]);
     setSelectedTrigger(undefined);
     setIsInspectionMode(false);
-  }, [difficulty]);
+    submittedQuestionRef.current = null;
+  }, [difficulty, config.questionCount, config.initialLives]);
 
   // Current scenario
   const currentScenario = scenarioList[currentIndex];
 
-  // Countdown timer logic for Hard mode
+  // Countdown timer logic for Hard mode (pure decrement, no side effects inside state updater)
   useEffect(() => {
     if (activeFeedback || !config.timeLimitPerQuestion || !currentScenario) {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -91,13 +81,7 @@ export const GamePlay: React.FC<GamePlayProps> = ({
 
     timerRef.current = setInterval(() => {
       setTimeLeft(prev => {
-        if (prev === null) return null;
-        if (prev <= 1) {
-          clearInterval(timerRef.current!);
-          // Time expired -> count as incorrect timeout
-          handleDecision(false, true); // Timeout auto-fails
-          return 0;
-        }
+        if (prev === null || prev <= 0) return prev;
         return prev - 1;
       });
     }, 1000);
@@ -105,24 +89,40 @@ export const GamePlay: React.FC<GamePlayProps> = ({
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [currentIndex, activeFeedback]);
+  }, [currentIndex, activeFeedback, config.timeLimitPerQuestion, currentScenario]);
 
-  // Clue discovery
+  // Handle timer expiration cleanly via effect using latest decision handler ref
+  useEffect(() => {
+    if (
+      config.timeLimitPerQuestion &&
+      timeLeft === 0 &&
+      !activeFeedback &&
+      currentScenario &&
+      submittedQuestionRef.current !== currentIndex
+    ) {
+      if (timerRef.current) clearInterval(timerRef.current);
+      latestDecisionHandlerRef.current(false, true);
+    }
+  }, [timeLeft, activeFeedback, currentScenario, currentIndex, config.timeLimitPerQuestion]);
+
+  // Clue discovery (blocked once question is submitted)
   const handleClueClick = (clueId: string) => {
+    if (activeFeedback || submittedQuestionRef.current === currentIndex) return;
     if (!unlockedClueIds.includes(clueId)) {
       setUnlockedClueIds(prev => [...prev, clueId]);
-      setScore(s => s + 20); // Small bonus for actively investigating!
+      setScore(s => s + 20);
     }
   };
 
   const handleRevealAllClues = () => {
-    if (!currentScenario) return;
+    if (!currentScenario || activeFeedback || submittedQuestionRef.current === currentIndex) return;
     setUnlockedClueIds(currentScenario.clues.map(c => c.id));
   };
 
-  // User decision (Safe vs Spoofed)
+  // User decision (Safe vs Spoofed) with atomic per-question lock
   const handleDecision = (userJudgedSpoofed: boolean, isTimeout = false) => {
-    if (!currentScenario || activeFeedback) return;
+    if (!currentScenario || activeFeedback || submittedQuestionRef.current === currentIndex) return;
+    submittedQuestionRef.current = currentIndex;
 
     if (timerRef.current) clearInterval(timerRef.current);
 
@@ -185,8 +185,11 @@ export const GamePlay: React.FC<GamePlayProps> = ({
     });
   };
 
+  latestDecisionHandlerRef.current = handleDecision;
+
   // Move to next question or complete
   const handleNextQuestion = () => {
+    submittedQuestionRef.current = null;
     setActiveFeedback(null);
     setUnlockedClueIds([]);
     setSelectedTrigger(undefined);

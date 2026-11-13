@@ -1,5 +1,5 @@
-import React from 'react';
-import { Volume2, VolumeX, ShieldCheck, BookOpen, RotateCcw } from 'lucide-react';
+import React, { useState } from 'react';
+import { Volume2, VolumeX, ShieldCheck, BookOpen, RotateCcw, AlertTriangle } from 'lucide-react';
 import { playClickSound } from '../utils/audio';
 
 interface HeaderProps {
@@ -19,7 +19,10 @@ export const Header: React.FC<HeaderProps> = ({
   onRestartCurrentGame,
   hasActiveGame
 }) => {
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+
   return (
+    <>
     <header className="sticky top-0 z-40 bg-black/80 backdrop-blur-md border-b border-rose-950/60 shadow-[0_4px_20px_rgba(225,29,72,0.06)]">
       {/* Top Hazard Warning Bar */}
       <div className="h-1 caution-hazard-strip w-full opacity-70" />
@@ -94,11 +97,10 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="flex items-center gap-3 shrink-0">
           {hasActiveGame && currentView === 'game' && onRestartCurrentGame && (
             <button
+              type="button"
               onClick={() => {
                 playClickSound();
-                if (window.confirm('現在の演習を最初からやり直しますか？')) {
-                  onRestartCurrentGame();
-                }
+                setShowResetConfirm(true);
               }}
               title="演習をリセット"
               className="px-2.5 py-1.5 text-xs text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
@@ -144,5 +146,55 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
     </header>
+
+    {showResetConfirm && onRestartCurrentGame && (
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="reset-dialog-title"
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm"
+      >
+        <div className="w-full max-w-sm rounded-2xl bg-slate-900 border border-rose-900/60 shadow-2xl p-6 space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400 shrink-0">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 id="reset-dialog-title" className="text-sm font-bold text-white">
+                演習をリセットしますか？
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                現在のスコアと進行状況は破棄され、最初から出題されます。
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={() => {
+                playClickSound();
+                setShowResetConfirm(false);
+              }}
+              className="px-3.5 py-2 text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors"
+            >
+              キャンセル
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                playClickSound();
+                setShowResetConfirm(false);
+                onRestartCurrentGame();
+              }}
+              className="px-3.5 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-500 rounded-lg transition-colors"
+            >
+              やり直す
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 };

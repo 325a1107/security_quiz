@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Scenario } from '../types/game';
 import { Mail, MessageSquare, Smartphone, ShieldAlert, Paperclip, ExternalLink, Globe, Lock, AlertCircle, Info, ChevronDown, ChevronUp } from 'lucide-react';
+import { sanitizeDisplayText } from '../utils/security';
 
 interface MessageRendererProps {
   scenario: Scenario;
@@ -71,7 +72,7 @@ export const MessageRenderer: React.FC<MessageRendererProps> = ({
             <div className="flex items-baseline gap-2">
               <span className="text-slate-400 w-14 shrink-0 font-medium">件名:</span>
               <h2 className="text-sm sm:text-base font-bold text-white break-words">
-                {scenario.subject || scenario.title}
+                {sanitizeDisplayText(scenario.subject || scenario.title)}
               </h2>
             </div>
           </div>
@@ -84,16 +85,16 @@ export const MessageRenderer: React.FC<MessageRendererProps> = ({
           >
             <div className="flex items-baseline gap-2 flex-wrap">
               <span className="text-slate-400 w-14 shrink-0 font-medium">差出人:</span>
-              <span className="font-semibold text-slate-200">{scenario.senderDisplay}</span>
+              <span className="font-semibold text-slate-200">{sanitizeDisplayText(scenario.senderDisplay)}</span>
               <span className="font-mono text-slate-400 bg-slate-800/80 px-2 py-0.5 rounded text-[11px] break-all">
-                &lt;{scenario.senderAddress}&gt;
+                &lt;{sanitizeDisplayText(scenario.senderAddress)}&gt;
               </span>
             </div>
           </div>
 
           <div className="flex items-baseline gap-2 px-1.5">
             <span className="text-slate-400 w-14 shrink-0 font-medium">宛先:</span>
-            <span className="text-slate-300">{scenario.recipientDisplay}</span>
+            <span className="text-slate-300">{sanitizeDisplayText(scenario.recipientDisplay)}</span>
           </div>
 
           {/* Raw Header Expansion Box */}
@@ -107,9 +108,9 @@ export const MessageRenderer: React.FC<MessageRendererProps> = ({
               <div className="text-emerald-400 font-bold mb-1">=== メール認証ヘッダー分析 ===</div>
               {Object.entries(scenario.headers).map(([key, val]) => (
                 <div key={key} className="break-all">
-                  <span className="text-slate-400 font-semibold">{key}: </span>
+                  <span className="text-slate-400 font-semibold">{sanitizeDisplayText(key)}: </span>
                   <span className={key.toLowerCase().includes('reply-to') ? 'text-amber-300 font-bold' : 'text-slate-300'}>
-                    {val}
+                    {sanitizeDisplayText(val)}
                   </span>
                 </div>
               ))}
@@ -124,14 +125,14 @@ export const MessageRenderer: React.FC<MessageRendererProps> = ({
             isInspectionMode ? 'cursor-pointer hover:bg-slate-800/30' : ''
           }`}
         >
-          {scenario.content}
+          {sanitizeDisplayText(scenario.content)}
         </div>
 
         {/* Interactive URL Link Banner if exists */}
         {scenario.urlInfo && (
           <div
             onClick={() => handleAreaClick('url')}
-            onMouseEnter={() => setHoveredUrl(scenario.urlInfo?.actualUrl || null)}
+            onMouseEnter={() => setHoveredUrl(sanitizeDisplayText(scenario.urlInfo?.actualUrl || '') || null)}
             onMouseLeave={() => setHoveredUrl(null)}
             className={`mx-5 mb-4 p-3 rounded-lg bg-slate-950/80 border flex flex-col sm:flex-row sm:items-center justify-between gap-2 transition-all ${
               isInspectionMode ? 'cursor-pointer hover:border-emerald-500' : 'border-slate-800'
@@ -142,7 +143,7 @@ export const MessageRenderer: React.FC<MessageRendererProps> = ({
               <div className="flex flex-col">
                 <span className="text-[11px] text-slate-400 font-medium">本文内リンク（カーソルを重ねて実リンク先を確認）：</span>
                 <span className="font-mono text-cyan-300 underline break-all">
-                  {scenario.urlInfo.displayText}
+                  {sanitizeDisplayText(scenario.urlInfo.displayText)}
                 </span>
               </div>
             </div>
@@ -166,10 +167,10 @@ export const MessageRenderer: React.FC<MessageRendererProps> = ({
               </div>
               <div className="flex flex-col text-xs">
                 <span className="font-semibold text-white font-mono break-all">
-                  {scenario.attachmentInfo.fileName}
+                  {sanitizeDisplayText(scenario.attachmentInfo.fileName)}
                 </span>
                 <span className="text-slate-400 text-[11px]">
-                  容量: {scenario.attachmentInfo.fileSize} · {scenario.attachmentInfo.note}
+                  容量: {sanitizeDisplayText(scenario.attachmentInfo.fileSize)} · {sanitizeDisplayText(scenario.attachmentInfo.note)}
                 </span>
               </div>
             </div>
@@ -224,9 +225,9 @@ export const MessageRenderer: React.FC<MessageRendererProps> = ({
             </div>
             <div className="flex-1 space-y-1">
               <div className="flex items-baseline gap-2">
-                <span className="font-bold text-white text-sm">{scenario.senderDisplay}</span>
-                <span className="font-mono text-slate-400 text-xs">{scenario.senderAddress}</span>
-                <span className="text-[11px] text-slate-400 ml-auto">{scenario.timestamp}</span>
+                <span className="font-bold text-white text-sm">{sanitizeDisplayText(scenario.senderDisplay)}</span>
+                <span className="font-mono text-slate-400 text-xs">{sanitizeDisplayText(scenario.senderAddress)}</span>
+                <span className="text-[11px] text-slate-400 ml-auto">{sanitizeDisplayText(scenario.timestamp)}</span>
               </div>
 
               <div
@@ -235,7 +236,7 @@ export const MessageRenderer: React.FC<MessageRendererProps> = ({
                   isInspectionMode ? 'cursor-pointer hover:border-emerald-500' : ''
                 } ${isAreaUnlocked('body') ? 'border-amber-500/50' : ''}`}
               >
-                {scenario.content}
+                {sanitizeDisplayText(scenario.content)}
               </div>
             </div>
           </div>
@@ -272,20 +273,20 @@ export const MessageRenderer: React.FC<MessageRendererProps> = ({
           <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-300">
             <Smartphone className="w-5 h-5" />
           </div>
-          <span className="font-bold text-white text-sm">{scenario.senderDisplay}</span>
-          <span className="text-[11px] font-mono text-slate-400">{scenario.senderAddress}</span>
+          <span className="font-bold text-white text-sm">{sanitizeDisplayText(scenario.senderDisplay)}</span>
+          <span className="text-[11px] font-mono text-slate-400">{sanitizeDisplayText(scenario.senderAddress)}</span>
         </div>
 
         {/* SMS Message Bubble */}
         <div className="p-6 space-y-3 min-h-[220px]">
-          <div className="text-center text-[10px] text-slate-500">{scenario.timestamp}</div>
+          <div className="text-center text-[10px] text-slate-500">{sanitizeDisplayText(scenario.timestamp)}</div>
           <div
             onClick={() => handleAreaClick('body')}
             className={`p-4 rounded-2xl rounded-bl-sm bg-slate-800 border border-slate-700 text-xs sm:text-sm text-slate-100 whitespace-pre-wrap leading-relaxed shadow-md ${
               isInspectionMode ? 'cursor-pointer hover:border-emerald-500' : ''
             } ${isAreaUnlocked('body') ? 'border-amber-500/50' : ''}`}
           >
-            {scenario.content}
+            {sanitizeDisplayText(scenario.content)}
           </div>
 
           {scenario.urlInfo && (
@@ -297,7 +298,7 @@ export const MessageRenderer: React.FC<MessageRendererProps> = ({
             >
               <div className="text-[10px] text-slate-400">SMS内URL解析:</div>
               <div className="font-mono text-cyan-400 break-all text-[11px]">
-                {scenario.urlInfo.displayText}
+                {sanitizeDisplayText(scenario.urlInfo.displayText)}
               </div>
             </div>
           )}
@@ -327,7 +328,7 @@ export const MessageRenderer: React.FC<MessageRendererProps> = ({
           } ${isAreaUnlocked('sender') ? 'bg-amber-500/10 border border-amber-500/40' : ''}`}
         >
           <Lock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-          <span className="truncate">{scenario.senderAddress}</span>
+          <span className="truncate">{sanitizeDisplayText(scenario.senderAddress)}</span>
         </div>
       </div>
 
@@ -338,8 +339,8 @@ export const MessageRenderer: React.FC<MessageRendererProps> = ({
             <Globe className="w-6 h-6" />
           </div>
           <div>
-            <h2 className="text-base sm:text-lg font-bold text-white">{scenario.title}</h2>
-            <p className="text-xs text-slate-400">{scenario.senderDisplay}</p>
+            <h2 className="text-base sm:text-lg font-bold text-white">{sanitizeDisplayText(scenario.title)}</h2>
+            <p className="text-xs text-slate-400">{sanitizeDisplayText(scenario.senderDisplay)}</p>
           </div>
         </div>
 
@@ -349,7 +350,7 @@ export const MessageRenderer: React.FC<MessageRendererProps> = ({
             isInspectionMode ? 'cursor-pointer hover:border-emerald-500' : ''
           } ${isAreaUnlocked('body') ? 'border-amber-500/50' : ''}`}
         >
-          {scenario.content}
+          {sanitizeDisplayText(scenario.content)}
         </div>
       </div>
 

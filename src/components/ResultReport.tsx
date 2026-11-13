@@ -21,7 +21,7 @@ export const ResultReport: React.FC<ResultReportProps> = ({
   onChangeDifficulty,
   onOpenHandbook
 }) => {
-  const [copied, setCopied] = useState(false);
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'error'>('idle');
   const [filterMode, setFilterMode] = useState<'all' | 'incorrect' | 'correct'>('all');
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
 
@@ -62,7 +62,7 @@ export const ResultReport: React.FC<ResultReportProps> = ({
     return true;
   });
 
-  const handleCopySummary = () => {
+  const handleCopySummary = async () => {
     playClickSound();
     const text = `【PsychShield セキュリティ防衛演習】
 難易度: ${config.name}
@@ -71,9 +71,17 @@ export const ResultReport: React.FC<ResultReportProps> = ({
 正答率: ${stats.correctCount}/${stats.totalQuestions} 問正解 (${accuracy}%)
 心理的誘導・なりすましへの対応力を測定しました！`;
 
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2500);
+    try {
+      if (!window.isSecureContext || !navigator.clipboard?.writeText) {
+        throw new Error('Clipboard API unavailable');
+      }
+      await navigator.clipboard.writeText(text);
+      setCopyStatus('copied');
+      setTimeout(() => setCopyStatus('idle'), 2500);
+    } catch {
+      setCopyStatus('error');
+      setTimeout(() => setCopyStatus('idle'), 3000);
+    }
   };
 
   const toggleExpand = (idx: number) => {
@@ -181,11 +189,22 @@ export const ResultReport: React.FC<ResultReportProps> = ({
               </button>
 
               <button
+                type="button"
                 onClick={handleCopySummary}
                 className="py-2.5 px-3.5 text-xs font-medium text-slate-300 hover:text-white bg-slate-800/80 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors flex items-center gap-1.5 ml-auto"
               >
-                {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{copied ? '結果をコピーしました' : '結果をシェア'}</span>
+                {copyStatus === 'copied' ? (
+                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                ) : (
+                  <Copy className="w-3.5 h-3.5" />
+                )}
+                <span>
+                  {copyStatus === 'copied'
+                    ? '結果をコピーしました'
+                    : copyStatus === 'error'
+                      ? 'コピーがブロックされました'
+                      : '結果をシェア'}
+                </span>
               </button>
             </div>
           </div>

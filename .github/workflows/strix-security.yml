@@ -1,0 +1,63 @@
+name: Strix AI Security Scan
+
+on:
+  pull_request:
+  schedule:
+    - cron: '0 3 * * 1' # Weekly standard scan on Monday 03:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  strix-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Required for Strix diff-scope resolution
+
+      - name: Set up Node.js & run local static security checks
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci || npm install
+      - run: npm run lint
+      - run: npm run security:check
+
+      - name: Install Strix
+        run: curl -sSL https://strix.ai/install | bash
+
+      - name: Run Strix Security Scan (PR Diff / Scheduled Standard)
+        if: ${{ secrets.STRIX_LLM != '' && secrets.LLM_API_KEY != '' }}
+        env:
+          STRIX_LLM: ${{ secrets.STRIX_LLM }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            strix -n -t ./ --scan-mode quick --diff-base "origin/${{ github.base_ref }}" --max-budget 10
+          else
+            strix -n -t ./ --scan-mode standard --max-budget 20
+          fi
+
+      - name: Fail unless Strix scan completed (prevent fail-open on budget stop)
+        if: ${{ secrets.STRIX_LLM != '' && secrets.LLM_API_KEY != '' }}
+        run: |
+          run_json=$(ls -t strix_runs/*/run.json 2>/dev/null | head -1)
+          if [ -z "$run_json" ]; then
+            echo "Strix run.json artifact not found." >&2
+            exit 1
+          fi
+          status=$(jq -r .status "$run_json")
+          if [ "$status" != "completed" ]; then
+            echo "Strix run status is '$status' — scan did not complete (likely budget exhausted). Raise --max-budget." >&2
+            exit 1
+          fi
+
+      - name: Upload Strix SARIF findings to GitHub Code Scanning
+        if: always() && hashFiles('strix_runs/**/findings.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: strix_runs

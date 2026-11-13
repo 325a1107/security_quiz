@@ -11,6 +11,13 @@ import { GamePlay } from './components/GamePlay';
 import { ResultReport } from './components/ResultReport';
 import { PsychologyHandbook } from './components/PsychologyHandbook';
 import { getMuted, setMuted } from './utils/audio';
+import {
+  ALLOWED_DIFFICULTIES,
+  HighScoreMap,
+  createEmptyHighScores,
+  safeParseHighScores,
+  safeSaveHighScores,
+} from './utils/security';
 
 const STORAGE_KEY_HIGHSCORES = 'psychshield_highscores_v1';
 
@@ -22,21 +29,17 @@ export default function App() {
   const [gameSessionId, setGameSessionId] = useState(1);
 
   // High score tracking per difficulty
-  const [highScores, setHighScores] = useState<Record<Difficulty, { score: number; accuracy: number; date: string } | null>>({
-    easy: null,
-    normal: null,
-    hard: null
-  });
+  const [highScores, setHighScores] = useState<HighScoreMap>(createEmptyHighScores);
 
-  // Load past high scores from localStorage
+  // Load and schema-validate past high scores from localStorage
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_HIGHSCORES);
       if (saved) {
-        setHighScores(JSON.parse(saved));
+        setHighScores(safeParseHighScores(saved));
       }
-    } catch (e) {
-      // Ignore localStorage errors
+    } catch {
+      // Ignore localStorage access restrictions
     }
   }, []);
 
@@ -47,6 +50,7 @@ export default function App() {
   };
 
   const handleSelectDifficulty = (diff: Difficulty) => {
+    if (!ALLOWED_DIFFICULTIES.includes(diff)) return;
     setSelectedDifficulty(diff);
     setGameSessionId(prev => prev + 1);
     setCurrentView('game');
@@ -56,25 +60,26 @@ export default function App() {
     setLastStats(stats);
     setCurrentView('result');
 
-    // Update high scores
-    try {
-      const accuracy = Math.round((stats.correctCount / stats.totalQuestions) * 100);
-      const currentBest = highScores[stats.difficulty];
+    if (!ALLOWED_DIFFICULTIES.includes(stats.difficulty) || stats.totalQuestions <= 0) {
+      return;
+    }
 
-      if (!currentBest || stats.score > currentBest.score) {
-        const updated = {
-          ...highScores,
-          [stats.difficulty]: {
-            score: stats.score,
-            accuracy,
-            date: new Date().toISOString()
-          }
-        };
-        setHighScores(updated);
-        localStorage.setItem(STORAGE_KEY_HIGHSCORES, JSON.stringify(updated));
-      }
-    } catch (e) {
-      // ignore
+    // Update high scores with bounded values
+    const safeScore = Math.max(0, Math.min(100000, Math.round(Number.isFinite(stats.score) ? stats.score : 0)));
+    const accuracy = Math.max(0, Math.min(100, Math.round((stats.correctCount / stats.totalQuestions) * 100)));
+    const currentBest = highScores[stats.difficulty];
+
+    if (!currentBest || safeScore > currentBest.score) {
+      const updated: HighScoreMap = {
+        ...highScores,
+        [stats.difficulty]: {
+          score: safeScore,
+          accuracy,
+          date: new Date().toISOString()
+        }
+      };
+      setHighScores(updated);
+      safeSaveHighScores(STORAGE_KEY_HIGHSCORES, updated);
     }
   };
 
